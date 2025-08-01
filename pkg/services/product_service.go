@@ -181,16 +181,16 @@ func (p *ProductService) FetchAllProductsData(productIDs []int, duration time.Du
 	return products, nutritionalData, nil
 }
 
-// monitorProgress displays a real-time progress bar and statistics during the fetching process.
-// It updates every 500ms and provides detailed information about the operation progress.
+// monitorProgress displays periodic status updates during the fetching process.
+// It updates every minute and provides concise progress information.
 func (p *ProductService) monitorProgress(stats *ProgressStats, done chan bool, progressDone chan bool) {
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(1 * time.Minute) // Update every minute
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-done:
-			// Print final progress
+			// Print final status
 			processed := atomic.LoadInt64(&stats.ProcessedCount)
 			success := atomic.LoadInt64(&stats.SuccessCount)
 			notFound := atomic.LoadInt64(&stats.NotFoundCount)
@@ -199,8 +199,8 @@ func (p *ProductService) monitorProgress(stats *ProgressStats, done chan bool, p
 			elapsed := time.Since(stats.StartTime)
 			rate := float64(processed) / elapsed.Seconds()
 
-			fmt.Printf("\r[%s] %d/%d (%.1f req/s) - Success: %d, 404: %d, Errors: %d\n",
-				"100%", processed, stats.TotalProducts, rate, success, notFound, errors)
+			p.logger.Info("COMPLETED: %d/%d products (%.1f req/s) - Success: %d, 404: %d, Errors: %d, Time: %v",
+				processed, stats.TotalProducts, rate, success, notFound, errors, elapsed)
 			progressDone <- true
 			return
 
@@ -213,21 +213,22 @@ func (p *ProductService) monitorProgress(stats *ProgressStats, done chan bool, p
 			if stats.TotalProducts > 0 {
 				elapsed := time.Since(stats.StartTime)
 				rate := float64(processed) / elapsed.Seconds()
+				percentage := float64(processed) / float64(stats.TotalProducts) * 100
 
-				// Create progress bar
-				barLength := 30
-				filled := int(float64(barLength) * float64(processed) / float64(stats.TotalProducts))
-				bar := ""
-				for i := 0; i < barLength; i++ {
-					if i < filled {
-						bar += "█"
-					} else {
-						bar += "░"
-					}
+				// Calculate estimated time remaining
+				var eta time.Duration
+				if rate > 0 {
+					remaining := stats.TotalProducts - processed
+					eta = time.Duration(float64(remaining)/rate) * time.Second
 				}
 
-				fmt.Printf("\r[%s] %d/%d (%.1f req/s) - Success: %d, 404: %d, Errors: %d",
-					bar, processed, stats.TotalProducts, rate, success, notFound, errors)
+				if eta > 0 {
+					p.logger.Info("Progress: %d/%d (%.1f%%) - Success: %d, 404: %d, Errors: %d - Rate: %.1f req/s - ETA: %v",
+						processed, stats.TotalProducts, percentage, success, notFound, errors, rate, eta)
+				} else {
+					p.logger.Info("Progress: %d/%d (%.1f%%) - Success: %d, 404: %d, Errors: %d - Rate: %.1f req/s",
+						processed, stats.TotalProducts, percentage, success, notFound, errors, rate)
+				}
 			}
 		}
 	}

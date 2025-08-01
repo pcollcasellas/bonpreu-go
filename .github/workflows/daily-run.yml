@@ -2,68 +2,43 @@ name: Daily Bonpreu Data Fetch
 
 on:
   schedule:
-    # Run daily at 00:00 UTC
-    - cron: '0 0 * * *'
-  workflow_dispatch: # Allow manual triggering
+    - cron: '0 0 * * *'  # Run daily at 00:00 UTC
+  workflow_dispatch:     # Allow manual triggering
 
 jobs:
   fetch-data:
     runs-on: ubuntu-latest
-    
+    env:
+      SITEMAP_URL: ${{ secrets.SITEMAP_URL }}
+      REQUEST_DURATION_MINUTES: ${{ secrets.REQUEST_DURATION_MINUTES }}
+      HTTP_TIMEOUT_SECONDS: ${{ secrets.HTTP_TIMEOUT_SECONDS }}
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_PORT: ${{ secrets.DB_PORT }}
+      DB_USER: ${{ secrets.DB_USER }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      DB_NAME: ${{ secrets.DB_NAME }}
+      DB_SSL_MODE: ${{ secrets.DB_SSL_MODE }}
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.21'
-        cache: true
-        
-    - name: Install dependencies
-      run: |
-        go mod download
-        go mod verify
-        
-    - name: Create environment file
-      run: |
-        cp env.example .env
-      env:
-        SITEMAP_URL: ${{ secrets.SITEMAP_URL }}
-        REQUEST_DURATION_MINUTES: ${{ secrets.REQUEST_DURATION_MINUTES }}
-        HTTP_TIMEOUT_SECONDS: ${{ secrets.HTTP_TIMEOUT_SECONDS }}
-        DB_HOST: ${{ secrets.DB_HOST }}
-        DB_PORT: ${{ secrets.DB_PORT }}
-        DB_USER: ${{ secrets.DB_USER }}
-        DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-        DB_NAME: ${{ secrets.DB_NAME }}
-        DB_SSL_MODE: ${{ secrets.DB_SSL_MODE }}
-        
-    - name: Build application
-      run: |
-        mkdir -p build
-        go build -o build/bonpreu-go cmd/bonpreu/main.go
-        
-    - name: Run application
-      run: |
-        ./build/bonpreu-go
-      env:
-        SITEMAP_URL: ${{ secrets.SITEMAP_URL }}
-        REQUEST_DURATION_MINUTES: ${{ secrets.REQUEST_DURATION_MINUTES }}
-        HTTP_TIMEOUT_SECONDS: ${{ secrets.HTTP_TIMEOUT_SECONDS }}
-        DB_HOST: ${{ secrets.DB_HOST }}
-        DB_PORT: ${{ secrets.DB_PORT }}
-        DB_USER: ${{ secrets.DB_USER }}
-        DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-        DB_NAME: ${{ secrets.DB_NAME }}
-        DB_SSL_MODE: ${{ secrets.DB_SSL_MODE }}
-        
-    - name: Upload logs (if available)
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: application-logs
-        path: |
-          *.log
-          logs/
-        retention-days: 7 
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Download dependencies
+        run: |
+          go mod download
+          go mod verify
+
+      - name: Build application
+        run: |
+          mkdir -p build
+          go build -o build/bonpreu-go cmd/bonpreu/main.go
+
+      - name: Run application
+        run: |
+          ./build/bonpreu-go
