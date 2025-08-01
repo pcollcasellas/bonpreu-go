@@ -14,7 +14,8 @@ import (
 	"bonpreu-go/pkg/utils"
 )
 
-// ProductService handles product data fetching operations
+// ProductService handles asynchronous fetching of product data from the Bonpreu API.
+// It manages concurrent requests with rate limiting and provides progress tracking.
 type ProductService struct {
 	client      *http.Client
 	logger      *utils.Logger
@@ -23,7 +24,9 @@ type ProductService struct {
 	rateLimiter *time.Ticker
 }
 
-// ProductResult represents the result of fetching a single product
+// ProductResult represents the result of a single product fetch operation.
+// It contains the fetched product data, nutritional information, any errors,
+// and the product ID for identification.
 type ProductResult struct {
 	Product         models.Product
 	NutritionalData []models.ProductNutritionalData
@@ -31,7 +34,8 @@ type ProductResult struct {
 	ProductID       int
 }
 
-// ProgressStats tracks progress statistics
+// ProgressStats tracks the progress of the product fetching operation.
+// It maintains atomic counters for thread-safe progress monitoring.
 type ProgressStats struct {
 	TotalProducts  int64
 	ProcessedCount int64
@@ -41,15 +45,17 @@ type ProgressStats struct {
 	StartTime      time.Time
 }
 
-// NewProductService creates a new ProductService instance
+// NewProductService creates a new ProductService instance with the specified number of workers.
+// The service uses a worker pool pattern to manage concurrent HTTP requests efficiently.
+// maxWorkers determines the maximum number of concurrent requests that can be processed.
 func NewProductService(maxWorkers int) *ProductService {
 	if maxWorkers <= 0 {
-		maxWorkers = 200 // Increased default concurrency limit
+		maxWorkers = 200
 	}
 
 	return &ProductService{
 		client: &http.Client{
-			Timeout: 10 * time.Second, // Reduced timeout to prevent hanging
+			Timeout: 10 * time.Second,
 		},
 		logger:     utils.NewLogger("ProductService"),
 		semaphore:  make(chan struct{}, maxWorkers),
@@ -57,24 +63,25 @@ func NewProductService(maxWorkers int) *ProductService {
 	}
 }
 
-// FetchAllProductsData fetches product data for all product IDs asynchronously with rate limiting
+// FetchAllProductsData asynchronously fetches product data for all provided product IDs.
+// It implements rate limiting when duration > 0, spreading requests over the specified duration.
+// The function returns slices of successfully fetched products and nutritional data,
+// along with any errors that occurred during the process.
 func (p *ProductService) FetchAllProductsData(productIDs []int, duration time.Duration) ([]models.Product, []models.ProductNutritionalData, error) {
 	start := time.Now()
 
-	// Calculate rate limiting
+	// Calculate rate limiting parameters
 	totalRequests := len(productIDs)
 	var requestsPerSecond float64
 	var delayBetweenRequests time.Duration
 
 	if duration > 0 {
-		// Rate limiting enabled
 		requestsPerSecond = float64(totalRequests) / duration.Seconds()
 		delayBetweenRequests = time.Duration(float64(time.Second) / requestsPerSecond)
 		p.logger.Info("Starting to fetch data for %d products with max %d concurrent workers", len(productIDs), p.maxWorkers)
 		p.logger.Info("Rate limiting: %.2f requests/second (%.2f ms between requests) over %v",
 			requestsPerSecond, float64(delayBetweenRequests.Microseconds())/1000, duration)
 	} else {
-		// No rate limiting (testing mode)
 		requestsPerSecond = 0
 		delayBetweenRequests = 0
 		p.logger.Info("Starting to fetch data for %d products with max %d concurrent workers (no rate limiting)", len(productIDs), p.maxWorkers)
@@ -86,7 +93,7 @@ func (p *ProductService) FetchAllProductsData(productIDs []int, duration time.Du
 		StartTime:     time.Now(),
 	}
 
-	// Create channels for results and errors
+	// Create channels for results and coordination
 	resultChan := make(chan ProductResult, len(productIDs))
 	var wg sync.WaitGroup
 
@@ -174,7 +181,8 @@ func (p *ProductService) FetchAllProductsData(productIDs []int, duration time.Du
 	return products, nutritionalData, nil
 }
 
-// monitorProgress displays a progress bar
+// monitorProgress displays a real-time progress bar and statistics during the fetching process.
+// It updates every 500ms and provides detailed information about the operation progress.
 func (p *ProductService) monitorProgress(stats *ProgressStats, done chan bool, progressDone chan bool) {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
@@ -225,9 +233,10 @@ func (p *ProductService) monitorProgress(stats *ProgressStats, done chan bool, p
 	}
 }
 
-// fetchSingleProductData fetches data for a single product
+// fetchSingleProductData fetches detailed product information for a single product ID.
+// It handles HTTP requests, gzip decompression, JSON parsing, and error handling.
+// The result is sent through the resultChan for collection by the main process.
 func (p *ProductService) fetchSingleProductData(productID int, resultChan chan<- ProductResult, stats *ProgressStats) {
-
 	result := ProductResult{
 		ProductID: productID,
 	}
@@ -299,14 +308,15 @@ func (p *ProductService) fetchSingleProductData(productID int, resultChan chan<-
 		return
 	}
 
-	// Parse product data using the new model structure
+	// Parse product data using the model structure
 	result.Product = models.ParseProductFromResponse(responseJSON, productID)
 	result.NutritionalData = models.ParseNutritionalDataFromResponse(responseJSON, productID)
 
 	resultChan <- result
 }
 
-// FetchSingleProductData fetches data for a single product (synchronous version)
+// FetchSingleProductData fetches data for a single product synchronously.
+// This is a convenience method for testing or when only one product is needed.
 func (p *ProductService) FetchSingleProductData(productID int) (models.Product, []models.ProductNutritionalData, error) {
 	resultChan := make(chan ProductResult, 1)
 

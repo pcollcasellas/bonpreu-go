@@ -6,7 +6,9 @@ import (
 	"time"
 )
 
-// Product represents a product from the Bonpreu API (matching Python structure)
+// Product represents a product from the Bonpreu API.
+// It contains all the essential product information including pricing,
+// availability, categories, and metadata.
 type Product struct {
 	ProductID                  int       `json:"product_id"`
 	ProductType                string    `json:"product_type"`
@@ -26,7 +28,8 @@ type Product struct {
 	CreatedAt                  time.Time `json:"created_at"`
 }
 
-// ProductNutritionalData represents nutritional information for a product
+// ProductNutritionalData represents nutritional information for a product.
+// It contains the nutritional value name and quantity for a specific product.
 type ProductNutritionalData struct {
 	ID                         *int      `json:"id,omitempty"`
 	ProductID                  int       `json:"product_id"`
@@ -35,13 +38,14 @@ type ProductNutritionalData struct {
 	CreatedAt                  time.Time `json:"created_at"`
 }
 
-// APIResponse represents the structure of the Bonpreu API response
+// APIResponse represents the raw JSON response from the Bonpreu API.
+// It contains the product data and additional BOP (Bonpreu) specific information.
 type APIResponse struct {
 	Product ProductData `json:"product"`
 	BopData BopData     `json:"bopData"`
 }
 
-// ProductData represents the product information in the API response
+// ProductData represents the core product information from the API response.
 type ProductData struct {
 	RetailerProductID   int       `json:"retailerProductId"`
 	Type                string    `json:"type"`
@@ -57,54 +61,59 @@ type ProductData struct {
 	CategoryPath        []string  `json:"categoryPath"`
 }
 
-// Price represents the price information
+// Price represents the price information for a product.
 type Price struct {
 	Amount   float64 `json:"amount"`
 	Currency string  `json:"currency"`
 }
 
-// UnitPrice represents the unit price information
+// UnitPrice represents the unit price information for a product.
 type UnitPrice struct {
 	Price Price  `json:"price"`
 	Unit  string `json:"unit"`
 }
 
-// BopData represents additional product data in the API response
+// BopData represents additional Bonpreu-specific product information.
+// It contains detailed descriptions and custom fields like nutritional data.
 type BopData struct {
 	DetailedDescription string  `json:"detailedDescription"`
 	Fields              []Field `json:"fields"`
 }
 
-// Field represents a field in the BopData
+// Field represents a custom field in the BOP data.
+// It can contain various types of information like nutritional data or cooking guidelines.
 type Field struct {
 	Title   string `json:"title"`
 	Content string `json:"content"`
 }
 
-// ParseProductFromResponse parses a product from the API response
+// ParseProductFromResponse parses a raw JSON response from the Bonpreu API
+// and converts it into a Product struct. It handles the complex nested structure
+// of the API response and extracts all relevant product information.
 func ParseProductFromResponse(responseJSON map[string]interface{}, productID int) Product {
 	product := Product{
-		ProductID: productID,
-		CreatedAt: time.Now().UTC(),
+		ProductID:         productID,
+		CreatedAt:         time.Now(),
+		ProductCategories: []string{},
 	}
 
 	// Extract product data
 	if productData, ok := responseJSON["product"].(map[string]interface{}); ok {
-		// Basic fields
+		// Basic product information
 		if productType, ok := productData["type"].(string); ok {
 			product.ProductType = productType
 		}
-		if name, ok := productData["name"].(string); ok {
-			product.ProductName = name
+		if productName, ok := productData["name"].(string); ok {
+			product.ProductName = strings.ReplaceAll(productName, "<br />", "")
 		}
-		if description, ok := productData["description"].(string); ok {
-			product.ProductDescription = strings.ReplaceAll(description, "<br />", "")
+		if productDescription, ok := productData["description"].(string); ok {
+			product.ProductDescription = strings.ReplaceAll(productDescription, "<br />", "")
 		}
-		if brand, ok := productData["brand"].(string); ok {
-			product.ProductBrand = brand
+		if productBrand, ok := productData["brand"].(string); ok {
+			product.ProductBrand = productBrand
 		}
-		if packSizeDesc, ok := productData["packSizeDescription"].(string); ok {
-			product.ProductPackSizeDescription = packSizeDesc
+		if packSizeDescription, ok := productData["packSizeDescription"].(string); ok {
+			product.ProductPackSizeDescription = packSizeDescription
 		}
 		if available, ok := productData["available"].(bool); ok {
 			product.ProductAvailable = available
@@ -180,7 +189,9 @@ func ParseProductFromResponse(responseJSON map[string]interface{}, productID int
 	return product
 }
 
-// ParseNutritionalDataFromResponse parses nutritional data from the API response
+// ParseNutritionalDataFromResponse parses nutritional data from the API response.
+// It looks for the "nutritionalData" field in the BOP data and extracts
+// nutritional information from the HTML table content.
 func ParseNutritionalDataFromResponse(responseJSON map[string]interface{}, productID int) []ProductNutritionalData {
 	var nutritionalData []ProductNutritionalData
 
@@ -202,7 +213,9 @@ func ParseNutritionalDataFromResponse(responseJSON map[string]interface{}, produ
 	return nutritionalData
 }
 
-// parseNutritionalDataTable parses the HTML table containing nutritional data
+// parseNutritionalDataTable parses the HTML table containing nutritional data.
+// It extracts nutritional values and quantities from HTML table rows and cells.
+// The function handles basic HTML table parsing for nutritional information.
 func parseNutritionalDataTable(html string, productID int) []ProductNutritionalData {
 	var nutritionalData []ProductNutritionalData
 

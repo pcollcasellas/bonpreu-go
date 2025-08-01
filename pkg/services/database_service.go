@@ -14,13 +14,17 @@ import (
 	_ "github.com/lib/pq"
 )
 
-// DatabaseService handles database operations
+// DatabaseService handles all database operations for the Bonpreu application.
+// It provides methods for connecting to PostgreSQL, saving products and nutritional data,
+// and retrieving database statistics. The service uses bulk operations for optimal performance.
 type DatabaseService struct {
 	db     *sql.DB
 	logger *utils.Logger
 }
 
-// NewDatabaseService creates a new DatabaseService instance
+// NewDatabaseService creates a new DatabaseService instance with the provided configuration.
+// It establishes a connection to the PostgreSQL database using the connection details
+// from the configuration. The connection is tested with a ping before returning.
 func NewDatabaseService(cfg *config.Configuration) (*DatabaseService, error) {
 	// Build connection string
 	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
@@ -49,12 +53,16 @@ func NewDatabaseService(cfg *config.Configuration) (*DatabaseService, error) {
 	}, nil
 }
 
-// Close closes the database connection
+// Close closes the database connection and releases associated resources.
+// This method should be called when the DatabaseService is no longer needed.
 func (d *DatabaseService) Close() error {
 	return d.db.Close()
 }
 
-// SaveProducts saves multiple products to the database
+// SaveProducts saves multiple products to the database using bulk insert operations.
+// It uses PostgreSQL's VALUES clause for optimal performance and handles conflicts
+// with ON CONFLICT DO UPDATE to update existing records. The operation is performed
+// within a transaction for data consistency.
 func (d *DatabaseService) SaveProducts(products []models.Product) error {
 	if len(products) == 0 {
 		return nil
@@ -72,8 +80,8 @@ func (d *DatabaseService) SaveProducts(products []models.Product) error {
 
 	// Use bulk insert with batching to respect PostgreSQL parameter limits
 	// PostgreSQL supports max 65535 parameters, so max ~4000 products per batch (16 params each)
-	maxParamsPerBatch := 60000                    // Conservative limit
-	maxProductsPerBatch := maxParamsPerBatch / 16 // ~3750 products per batch
+	maxParamsPerBatch := 60000
+	maxProductsPerBatch := maxParamsPerBatch / 16
 
 	for i := 0; i < len(products); i += maxProductsPerBatch {
 		end := i + maxProductsPerBatch
@@ -158,7 +166,10 @@ func (d *DatabaseService) SaveProducts(products []models.Product) error {
 	return nil
 }
 
-// SaveNutritionalData saves nutritional data to the database
+// SaveNutritionalData saves nutritional data to the database using bulk insert operations.
+// It uses PostgreSQL's VALUES clause for optimal performance and handles conflicts
+// with ON CONFLICT DO NOTHING to avoid duplicate entries. The operation is performed
+// within a transaction for data consistency.
 func (d *DatabaseService) SaveNutritionalData(nutritionalData []models.ProductNutritionalData) error {
 	if len(nutritionalData) == 0 {
 		return nil
@@ -175,51 +186,49 @@ func (d *DatabaseService) SaveNutritionalData(nutritionalData []models.ProductNu
 	defer tx.Rollback()
 
 	// Use bulk insert for nutritional data with batching
-	if len(nutritionalData) > 0 {
-		// Nutritional data has 4 parameters per record, so max ~15000 records per batch
-		maxParamsPerBatch := 60000                      // Conservative limit
-		maxNutritionalPerBatch := maxParamsPerBatch / 4 // ~15000 records per batch
+	// Nutritional data has 4 parameters per record, so max ~15000 records per batch
+	maxParamsPerBatch := 60000
+	maxNutritionalPerBatch := maxParamsPerBatch / 4
 
-		for i := 0; i < len(nutritionalData); i += maxNutritionalPerBatch {
-			end := i + maxNutritionalPerBatch
-			if end > len(nutritionalData) {
-				end = len(nutritionalData)
-			}
+	for i := 0; i < len(nutritionalData); i += maxNutritionalPerBatch {
+		end := i + maxNutritionalPerBatch
+		if end > len(nutritionalData) {
+			end = len(nutritionalData)
+		}
 
-			batch := nutritionalData[i:end]
-			values := make([]string, 0, len(batch))
-			args := make([]interface{}, 0, len(batch)*4)
-			argIndex := 1
+		batch := nutritionalData[i:end]
+		values := make([]string, 0, len(batch))
+		args := make([]interface{}, 0, len(batch)*4)
+		argIndex := 1
 
-			for _, data := range batch {
-				values = append(values, fmt.Sprintf("($%d, $%d, $%d, $%d)",
-					argIndex, argIndex+1, argIndex+2, argIndex+3))
+		for _, data := range batch {
+			values = append(values, fmt.Sprintf("($%d, $%d, $%d, $%d)",
+				argIndex, argIndex+1, argIndex+2, argIndex+3))
 
-				args = append(args,
-					data.ProductID,
-					data.ProductNutritionalValue,
-					data.ProductNutritionalQuantity,
-					data.CreatedAt,
-				)
-				argIndex += 4
-			}
+			args = append(args,
+				data.ProductID,
+				data.ProductNutritionalValue,
+				data.ProductNutritionalQuantity,
+				data.CreatedAt,
+			)
+			argIndex += 4
+		}
 
-			query := fmt.Sprintf(`
-				INSERT INTO product_nutritional_data (
-					product_id, product_nutritional_value, product_nutritional_quantity, created_at
-				) VALUES %s
-				ON CONFLICT DO NOTHING
-			`, strings.Join(values, ","))
+		query := fmt.Sprintf(`
+			INSERT INTO product_nutritional_data (
+				product_id, product_nutritional_value, product_nutritional_quantity, created_at
+			) VALUES %s
+			ON CONFLICT DO NOTHING
+		`, strings.Join(values, ","))
 
-			_, err = tx.Exec(query, args...)
-			if err != nil {
-				return fmt.Errorf("failed to bulk insert nutritional data batch %d-%d: %w", i+1, end, err)
-			}
+		_, err = tx.Exec(query, args...)
+		if err != nil {
+			return fmt.Errorf("failed to bulk insert nutritional data batch %d-%d: %w", i+1, end, err)
+		}
 
-			// Log progress for large datasets
-			if len(nutritionalData) > 1000 {
-				d.logger.Info("Inserted batch %d-%d of %d nutritional data entries", i+1, end, len(nutritionalData))
-			}
+		// Log progress for large datasets
+		if len(nutritionalData) > 1000 {
+			d.logger.Info("Inserted batch %d-%d of %d nutritional data entries", i+1, end, len(nutritionalData))
 		}
 	}
 
@@ -232,7 +241,10 @@ func (d *DatabaseService) SaveNutritionalData(nutritionalData []models.ProductNu
 	return nil
 }
 
-// SaveAllData saves both products and nutritional data
+// SaveAllData saves both products and nutritional data to the database.
+// It first saves all products, then saves all nutritional data. This ensures
+// that foreign key constraints are satisfied. The operation is optimized for
+// large datasets with bulk insert operations.
 func (d *DatabaseService) SaveAllData(products []models.Product, nutritionalData []models.ProductNutritionalData) error {
 	start := time.Now()
 	d.logger.Info("Saving all data to database...")
@@ -251,7 +263,8 @@ func (d *DatabaseService) SaveAllData(products []models.Product, nutritionalData
 	return nil
 }
 
-// GetProductCount returns the total number of products in the database
+// GetProductCount returns the total number of products in the database.
+// This method provides a quick way to check the current state of the products table.
 func (d *DatabaseService) GetProductCount() (int, error) {
 	var count int
 	err := d.db.QueryRow("SELECT COUNT(*) FROM products").Scan(&count)
@@ -261,7 +274,8 @@ func (d *DatabaseService) GetProductCount() (int, error) {
 	return count, nil
 }
 
-// GetNutritionalDataCount returns the total number of nutritional data entries
+// GetNutritionalDataCount returns the total number of nutritional data entries in the database.
+// This method provides a quick way to check the current state of the nutritional data table.
 func (d *DatabaseService) GetNutritionalDataCount() (int, error) {
 	var count int
 	err := d.db.QueryRow("SELECT COUNT(*) FROM product_nutritional_data").Scan(&count)

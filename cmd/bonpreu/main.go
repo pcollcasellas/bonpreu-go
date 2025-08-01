@@ -11,6 +11,14 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// main is the entry point of the Bonpreu Go application.
+// It orchestrates the entire data fetching and storage process:
+// 1. Loads environment variables and configuration
+// 2. Initializes all required services (sitemap, product, database)
+// 3. Fetches product IDs from the Bonpreu sitemap
+// 4. Asynchronously fetches detailed product data for each product ID
+// 5. Saves all data to the PostgreSQL database
+// 6. Reports final statistics and execution duration
 func main() {
 	start := time.Now()
 	logger := utils.NewLogger("Main")
@@ -23,17 +31,13 @@ func main() {
 	}
 
 	// Load configuration
-	// Choose your mode:
-	// cfg := config.DefaultConfig() // Production: Uses REQUEST_DURATION_MINUTES from env
-	cfg := config.TestingConfig() // Testing: no rate limiting
+	cfg := config.TestingConfig()
 
 	logger.Info("Loaded configuration")
 
 	// Initialize services
 	sitemapService := services.NewSitemapService()
-	productService := services.NewProductService(200) // Increased to 200 concurrent workers
-
-	// Initialize database service
+	productService := services.NewProductService(200)
 	dbService, err := services.NewDatabaseService(cfg)
 	if err != nil {
 		logger.Error("Error initializing database service: %v", err)
@@ -43,7 +47,6 @@ func main() {
 
 	logger.Info("Initialized services")
 
-	// Fetch product IDs
 	logger.Info("Fetching product IDs from sitemap...")
 
 	productIDs, err := sitemapService.FetchProductIds(cfg.SitemapURL)
@@ -60,7 +63,6 @@ func main() {
 		productIDInts = append(productIDInts, item.ProductID)
 	}
 
-	// Fetch product data using duration from config
 	if cfg.RequestDuration > 0 {
 		logger.Info("Fetching product data for %d products over %v...", len(productIDInts), cfg.RequestDuration)
 	} else {
@@ -76,14 +78,12 @@ func main() {
 	logger.Info("Successfully fetched data for %d products", len(products))
 	logger.Info("Total nutritional data entries: %d", len(nutritionalData))
 
-	// Save data to database
 	logger.Info("Saving data to database...")
 	if err := dbService.SaveAllData(products, nutritionalData); err != nil {
 		logger.Error("Error saving data to database: %v", err)
 		log.Fatalf("Error saving data to database: %v", err)
 	}
 
-	// Get database statistics
 	productCount, err := dbService.GetProductCount()
 	if err != nil {
 		logger.Error("Error getting product count: %v", err)

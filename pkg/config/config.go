@@ -6,20 +6,22 @@ import (
 	"time"
 )
 
-// Configuration holds application configuration
+// Configuration holds all application configuration settings.
+// It includes settings for sitemap URL, request rate limiting,
+// HTTP client configuration, and database connection details.
 type Configuration struct {
 	SitemapURL      string
-	RequestDuration time.Duration // Duration to spread requests over (0 = no rate limiting)
+	RequestDuration time.Duration
 	HTTPClient      HTTPClientConfig
 	Database        DatabaseConfig
 }
 
-// HTTPClientConfig holds HTTP client configuration
+// HTTPClientConfig holds HTTP client configuration settings.
 type HTTPClientConfig struct {
-	Timeout int // in seconds
+	Timeout int // Timeout in seconds
 }
 
-// DatabaseConfig holds database configuration
+// DatabaseConfig holds database connection configuration.
 type DatabaseConfig struct {
 	Host     string
 	Port     int
@@ -29,7 +31,9 @@ type DatabaseConfig struct {
 	SSLMode  string
 }
 
-// getEnvWithDefault gets an environment variable or returns a default value
+// getEnvWithDefault retrieves an environment variable value or returns a default.
+// It checks if the environment variable exists and is not empty,
+// returning the environment value if present, otherwise the default value.
 func getEnvWithDefault(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
@@ -37,7 +41,9 @@ func getEnvWithDefault(key, defaultValue string) string {
 	return defaultValue
 }
 
-// getEnvIntWithDefault gets an environment variable as int or returns a default value
+// getEnvIntWithDefault retrieves an environment variable as an integer or returns a default.
+// It attempts to parse the environment variable as an integer,
+// returning the parsed value if successful, otherwise the default value.
 func getEnvIntWithDefault(key string, defaultValue int) int {
 	if value := os.Getenv(key); value != "" {
 		if intValue, err := strconv.Atoi(value); err == nil {
@@ -47,7 +53,10 @@ func getEnvIntWithDefault(key string, defaultValue int) int {
 	return defaultValue
 }
 
-// DefaultConfig returns the default configuration
+// DefaultConfig returns the default configuration for production use.
+// This configuration includes rate limiting to be respectful to servers,
+// with requests spread over the duration specified in REQUEST_DURATION_MINUTES.
+// Database settings are loaded from environment variables with sensible defaults.
 func DefaultConfig() *Configuration {
 	return &Configuration{
 		SitemapURL:      getEnvWithDefault("SITEMAP_URL", "https://www.compraonline.bonpreuesclat.cat/sitemaps/sitemap-products-part1.xml"),
@@ -66,7 +75,9 @@ func DefaultConfig() *Configuration {
 	}
 }
 
-// TestingConfig returns configuration for testing (no rate limiting)
+// TestingConfig returns a configuration optimized for testing and development.
+// This configuration disables rate limiting (RequestDuration = 0) to allow
+// for faster processing during testing. All other settings are identical to DefaultConfig.
 func TestingConfig() *Configuration {
 	return &Configuration{
 		SitemapURL:      getEnvWithDefault("SITEMAP_URL", "https://www.compraonline.bonpreuesclat.cat/sitemaps/sitemap-products-part1.xml"),
