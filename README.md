@@ -269,7 +269,7 @@ To use the automated workflow, you need to configure the following secrets in yo
 
 #### Required Secrets:
 - `SITEMAP_URL`: The Bonpreu sitemap URL (e.g., `https://www.compraonline.bonpreuesclat.cat/sitemaps/sitemap-products-part1.xml`)
-- `REQUEST_DURATION_MINUTES`: Rate limiting duration in minutes (e.g., `1`)
+- `REQUEST_DURATION_MINUTES`: Rate limiting duration in minutes (e.g., `10`)
 - `HTTP_TIMEOUT_SECONDS`: HTTP client timeout in seconds (e.g., `30`)
 
 #### Database Secrets:
