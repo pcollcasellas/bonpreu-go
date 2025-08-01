@@ -31,7 +31,7 @@ func main() {
 	}
 
 	// Load configuration
-	cfg := config.TestingConfig()
+	cfg := config.DefaultConfig()
 
 	logger.Info("Loaded configuration")
 

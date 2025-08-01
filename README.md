@@ -113,21 +113,6 @@ cp env.example .env
 - `DB_NAME`: Database name
 - `DB_SSL_MODE`: SSL mode (usually "require")
 
-### Configuration Modes
-
-The application supports two modes:
-
-#### Production Mode (Rate Limited)
-```go
-cfg := config.DefaultConfig()    // Uses REQUEST_DURATION_MINUTES from env
-```
-
-#### Testing Mode (No Rate Limiting)
-```go
-cfg := config.TestingConfig()   // No rate limiting for testing
-```
-
-To switch modes, edit `cmd/bonpreu/main.go` and change the configuration line.
 
 ### Available Commands
 
@@ -268,4 +253,42 @@ The application provides detailed logging including:
 - Request rates and progress
 - Success/error statistics
 - Database operation timing
-- Overall execution duration 
+- Overall execution duration
+
+## GitHub Actions
+
+The project includes a GitHub Actions workflow that runs the application daily at 00:00 UTC to automatically fetch and store the latest product data.
+
+### Setting up GitHub Secrets
+
+To use the automated workflow, you need to configure the following secrets in your GitHub repository:
+
+1. Go to your repository on GitHub
+2. Navigate to **Settings** → **Secrets and variables** → **Actions**
+3. Add the following repository secrets:
+
+#### Required Secrets:
+- `SITEMAP_URL`: The Bonpreu sitemap URL (e.g., `https://www.compraonline.bonpreuesclat.cat/sitemaps/sitemap-products-part1.xml`)
+- `REQUEST_DURATION_MINUTES`: Rate limiting duration in minutes (e.g., `1`)
+- `HTTP_TIMEOUT_SECONDS`: HTTP client timeout in seconds (e.g., `30`)
+
+#### Database Secrets:
+- `DB_HOST`: Your Neon database host (e.g., `ep-cool-name-123456.us-east-2.aws.neon.tech`)
+- `DB_PORT`: Database port (usually `5432`)
+- `DB_USER`: Database username
+- `DB_PASSWORD`: Database password
+- `DB_NAME`: Database name
+- `DB_SSL_MODE`: SSL mode (usually `require`)
+
+### Workflow Features:
+- **Scheduled Execution**: Runs daily at 00:00 UTC
+- **Manual Trigger**: Can be manually triggered via GitHub Actions UI
+- **Log Artifacts**: Uploads application logs as artifacts for debugging
+- **Go Caching**: Uses GitHub Actions Go module caching for faster builds
+- **Error Handling**: Continues to upload logs even if the application fails
+
+### Manual Execution:
+You can manually trigger the workflow by:
+1. Going to the **Actions** tab in your repository
+2. Selecting the **Daily Bonpreu Data Fetch** workflow
+3. Clicking **Run workflow** 
