@@ -79,9 +79,9 @@ func (d *DatabaseService) SaveProducts(products []models.Product) error {
 	defer tx.Rollback()
 
 	// Use bulk insert with batching to respect PostgreSQL parameter limits
-	// PostgreSQL supports max 65535 parameters, so max ~4000 products per batch (16 params each)
+	// PostgreSQL supports max 65535 parameters, so max ~3500 products per batch (17 params each)
 	maxParamsPerBatch := 60000
-	maxProductsPerBatch := maxParamsPerBatch / 16
+	maxProductsPerBatch := maxParamsPerBatch / 17
 
 	for i := 0; i < len(products); i += maxProductsPerBatch {
 		end := i + maxProductsPerBatch
@@ -95,9 +95,9 @@ func (d *DatabaseService) SaveProducts(products []models.Product) error {
 		argIndex := 1
 
 		for _, product := range batch {
-			values = append(values, fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d)",
+			values = append(values, fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d)",
 				argIndex, argIndex+1, argIndex+2, argIndex+3, argIndex+4, argIndex+5, argIndex+6, argIndex+7,
-				argIndex+8, argIndex+9, argIndex+10, argIndex+11, argIndex+12, argIndex+13, argIndex+14, argIndex+15))
+				argIndex+8, argIndex+9, argIndex+10, argIndex+11, argIndex+12, argIndex+13, argIndex+14, argIndex+15, argIndex+16))
 
 			args = append(args,
 				product.ProductID,
@@ -115,9 +115,10 @@ func (d *DatabaseService) SaveProducts(products []models.Product) error {
 				product.ProductAlcohol,
 				product.ProductCookingGuidelines,
 				pq.Array(product.ProductCategories),
+				product.PromotionType,
 				product.CreatedAt,
 			)
-			argIndex += 16
+			argIndex += 17
 		}
 
 		query := fmt.Sprintf(`
@@ -126,7 +127,7 @@ func (d *DatabaseService) SaveProducts(products []models.Product) error {
 				product_brand, product_pack_size_description, product_price_amount, 
 				product_currency, product_unit_price_amount, product_unit_price_currency, 
 				product_unit_price_unit, product_available, product_alcohol, 
-				product_cooking_guidelines, product_categories, created_at
+				product_cooking_guidelines, product_categories, promotion_type, created_at
 			) VALUES %s
 			ON CONFLICT (product_id) DO UPDATE SET
 				product_type = EXCLUDED.product_type,
@@ -143,6 +144,7 @@ func (d *DatabaseService) SaveProducts(products []models.Product) error {
 				product_alcohol = EXCLUDED.product_alcohol,
 				product_cooking_guidelines = EXCLUDED.product_cooking_guidelines,
 				product_categories = EXCLUDED.product_categories,
+				promotion_type = EXCLUDED.promotion_type,
 				updated_at = CURRENT_TIMESTAMP
 		`, strings.Join(values, ","))
 

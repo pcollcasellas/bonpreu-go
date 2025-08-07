@@ -25,6 +25,7 @@ type Product struct {
 	ProductAlcohol             bool      `json:"product_alcohol"`
 	ProductCookingGuidelines   string    `json:"product_cooking_guidelines"`
 	ProductCategories          []string  `json:"product_categories"`
+	PromotionType              string    `json:"promotion_type"`
 	CreatedAt                  time.Time `json:"created_at"`
 }
 
@@ -181,6 +182,16 @@ func ParseProductFromResponse(responseJSON map[string]interface{}, productID int
 							break
 						}
 					}
+				}
+			}
+		}
+
+		// Extract promotion type from bopPromotions
+		if bopPromotions, ok := responseJSON["bopPromotions"].([]interface{}); ok && len(bopPromotions) > 0 {
+			// Get the first promotion's type
+			if firstPromotion, ok := bopPromotions[0].(map[string]interface{}); ok {
+				if promoType, ok := firstPromotion["type"].(string); ok {
+					product.PromotionType = promoType
 				}
 			}
 		}
